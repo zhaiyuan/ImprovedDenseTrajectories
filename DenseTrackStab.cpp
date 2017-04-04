@@ -10,7 +10,7 @@ using namespace cv::gpu;
 
 int show_track  = 0;
 int show_warped = 0;
-int show_flow   = 0;
+int show_flow   = 1;
 int save_flow_viz  = 0;
 int save_flow_orig = 0;
 
@@ -67,6 +67,7 @@ int main(int argc, char** argv)
 	Mat flow, human_mask;
 
 	// Setup TVL1 flow computation on GPU
+	Mat flow_x, flow_y;
 	GpuMat gpu_grey, gpu_prev_grey, gpu_flow_x, gpu_flow_y;
 	setDevice(0);
 	OpticalFlowDual_TVL1_GPU flow_tvl1;
@@ -94,6 +95,8 @@ int main(int argc, char** argv)
 			frame_num++;
 			continue;
 		}
+
+		std::cout << "Reading frame: " << frame_num << std::endl;
 
 		if(frame_num == start_frame) {
 			image.create(frame.size(), CV_8UC3);
@@ -216,7 +219,21 @@ int main(int argc, char** argv)
 		// Show and/or save the flow visualization images (at the first scale)
 		if( show_flow == 1 || save_flow_viz == 1 ) {
 
-			Mat flow_viz_orig = my::ProcessFlowForVisualization(flow_pyr[0]);
+			// Upload to the GPU
+			gpu_prev_grey.upload(prev_grey);
+			gpu_grey.upload(grey);
+			flow_tvl1(gpu_prev_grey, gpu_grey, gpu_flow_x, gpu_flow_y);
+
+			// Download back to the CPU
+			gpu_flow_x.download(flow_x);
+			gpu_flow_y.download(flow_y);
+			std::vector<Mat> flow_ch;
+			flow_ch.push_back(flow_x);
+			flow_ch.push_back(flow_y);
+			Mat flow_merged;
+			merge(flow_ch, flow_merged);
+
+			Mat flow_viz_orig = my::ProcessFlowForVisualization(flow_merged);
 			Mat flow_viz_warp = my::ProcessFlowForVisualization(flow_warp_pyr[0]);
 
 			if ( show_flow == 1 ) {
