@@ -10,6 +10,33 @@ using namespace cv;
 namespace my
 {
 
+static Mat
+ProcessFlowForVisualization(const Mat& flow)
+{
+
+  Mat flow_xy[2];
+  split(flow, flow_xy);
+
+  Mat magnitude, angle;
+  cartToPolar(flow_xy[0], flow_xy[1], magnitude, angle, true);
+
+  //translate magnitude to range [0;1]
+  double mag_max;
+  minMaxLoc(magnitude, 0, &mag_max);
+  magnitude.convertTo(magnitude, -1, 1.0 / mag_max);
+
+  //build hsv image
+  Mat _hsv[3], hsv;
+  _hsv[0] = angle;
+  _hsv[1] = Mat::ones(angle.size(), CV_32F);
+  _hsv[2] = magnitude;
+  merge(_hsv, 3, hsv);
+
+  Mat bgr;//CV_32FC3 matrix
+  cvtColor(hsv, bgr, cv::COLOR_HSV2BGR);
+  return bgr;
+}
+
 static void
 FarnebackPolyExp( const Mat& src, Mat& dst, int n, double sigma )
 {
@@ -462,7 +489,7 @@ void calcOpticalFlowFarneback(std::vector<Mat>& prev_poly_exp_pyr, std::vector<M
 
         for( i = 0; i < iterations; i++ )
             FarnebackUpdateFlow_GaussianBlur( R[0], R[1], flow, M, winsize, i < iterations - 1 );
-		
+
 		MedianBlurFlow(flow, 5);
         prevFlow = flow;
 		flow.copyTo(flow_pyr[k]);

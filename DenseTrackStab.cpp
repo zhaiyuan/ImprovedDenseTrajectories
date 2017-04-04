@@ -168,21 +168,35 @@ int main(int argc, char** argv)
 
 		Mat H_inv = H.inv();
 		Mat grey_warp = Mat::zeros(grey.size(), CV_8UC1);
+		Mat diff = Mat::zeros(grey.size(), CV_8UC1);
 
 		// warp the second frame
 		MyWarpPerspective(prev_grey, grey, grey_warp, H_inv);
 
-		if( show_track == 1 ) {
-			imshow( "GreyOrig", grey);
-			imshow( "GreyWarp", grey_warp);
-			c = cvWaitKey(3);
-			if((char)c == 27) break;
-		}
+		diff = grey - grey_warp;
+
+		// if( show_track == 1 ) {
+		// 	imshow( "GreyOrig", grey);
+		// 	imshow( "GreyWarp", grey_warp);
+		// 	imshow( "Difference", diff);
+		// 	c = cvWaitKey(3);
+		// 	if((char)c == 27) break;
+		// }
 
 		// compute optical flow for all scales once
 		// compute the flow again on the warped image (!)
 		my::FarnebackPolyExpPyr(grey_warp, poly_warp_pyr, fscales, 7, 1.5);
 		my::calcOpticalFlowFarneback(prev_poly_pyr, poly_warp_pyr, flow_warp_pyr, 10, 2);
+
+
+		if( show_track == 1 ) {
+			Mat flow_viz_orig = my::ProcessFlowForVisualization(flow_pyr[0]);
+			Mat flow_viz_warp = my::ProcessFlowForVisualization(flow_warp_pyr[0]);
+			imshow("Flow Original", flow_viz_orig);
+			imshow("Flow Warp", flow_viz_warp);
+			c = cvWaitKey(3);
+			if((char)c == 27) break;
+		}
 
 		// for(int iScale = 0; iScale < scale_num; iScale++) {
 		//
