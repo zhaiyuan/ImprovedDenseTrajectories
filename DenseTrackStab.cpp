@@ -5,13 +5,17 @@
 #include "FlowExtractor.h"
 
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 using namespace cv;
 using namespace cv::gpu;
 
+
 int show_track  = 0;
 int show_warped = 0;
-int show_flow   = 1;
+int show_flow   = 0;
 int save_flow_viz  = 0;
 int save_flow_orig = 0;
 
@@ -20,14 +24,53 @@ int compute_descriptors = 0;
 
 int main(int argc, char** argv)
 {
-	VideoCapture capture;
+
 	char* video = argv[1];
 	int flag = arg_parse(argc, argv);
+
+	VideoCapture capture;
 	capture.open(video);
 
 	if(!capture.isOpened()) {
 		fprintf(stderr, "Could not initialize capturing..\n");
 		return -1;
+	}
+
+	char dir_flow_viz_orig[500];
+	char dir_flow_viz_warp[500];
+	char dir_flow_xy_orig[500];
+	char dir_flow_xy_warp[500];
+
+	if (out_dir != NULL)
+	{
+		struct stat st = {0};
+		if (stat(out_dir, &st) == -1)
+		{
+			std::cout << "Creating directory: " << out_dir << std::endl;
+			mkdir(out_dir, 0700);
+		}
+
+		sprintf(dir_flow_viz_orig, "%s/flow_viz_orig/", out_dir);
+		sprintf(dir_flow_viz_warp, "%s/flow_viz_warp/", out_dir);
+		sprintf(dir_flow_xy_warp,  "%s/flow_xy_warp/", out_dir);
+
+		if (stat(dir_flow_viz_orig, &st) == -1)
+		{
+			std::cout << "Creating directory: " << dir_flow_viz_orig << std::endl;
+			mkdir(dir_flow_viz_orig, 0700);
+		}
+
+		if (stat(dir_flow_viz_warp, &st) == -1)
+		{
+			std::cout << "Creating directory: " << dir_flow_viz_warp << std::endl;
+			mkdir(dir_flow_viz_warp, 0700);
+		}
+
+		if (stat(dir_flow_xy_warp, &st) == -1)
+		{
+			std::cout << "Creating directory: " << dir_flow_xy_warp << std::endl;
+			mkdir(dir_flow_xy_warp, 0700);
+		}
 	}
 
 	int frame_num = 0;
@@ -218,7 +261,7 @@ int main(int argc, char** argv)
 		my::calcOpticalFlowFarneback(prev_poly_pyr, poly_warp_pyr, flow_warp_pyr, 10, 2);
 
 		// Show and/or save the flow visualization images (at the first scale)
-		if( show_flow == 1 || save_flow_viz == 1 ) {
+		if( show_flow == 1 || out_dir != NULL ) {
 
 			Mat tvl1_flow_orig = flow_extractor.computeFlow(prev_grey, grey);
 			Mat tvl1_flow_warp = flow_extractor.computeFlow(prev_grey, grey_warp);
@@ -233,20 +276,33 @@ int main(int argc, char** argv)
 				if((char)c == 27) break;
 			}
 
-			if ( save_flow_viz == 1 ) {
+			if ( out_dir != NULL ) {
 
-				char buff[100];
+				char buff[1000];
+
+				// Save raw flow, x and y directions
+				std::vector<Mat> flow_xy_split(2);
+				split(tvl1_flow_warp, flow_xy_split);
+				Mat flow_ch3 = Mat::zeros(tvl1_flow_warp.size(), CV_32F);
+				Mat flow_merged, flow_to_save;
+				flow_xy_split.push_back(flow_ch3);
+				merge(flow_xy_split, flow_merged);
+				flow_merged.convertTo(flow_to_save, CV_8UC3, 255.0);
+
+				sprintf(buff, "%s%06d.jpg", dir_flow_xy_warp, frame_num);
+				std::cout << "Saving original flow image: " << std::string(buff) << std::endl;
+				imwrite(std::string(buff), flow_to_save);
 
 				// Save original flow visualization image
-				sprintf(buff, "../out/orig_%06d.png", frame_num);
-				std::cout << "Saving original flow image: " << std::string(buff) << std::endl;
+				sprintf(buff, "%s%06d.jpg", dir_flow_viz_orig, frame_num);
+				std::cout << "Saving flow visualization (orig): " << std::string(buff) << std::endl;
 				Mat flow_viz_orig_char;
 				flow_viz_orig.convertTo(flow_viz_orig_char, CV_8UC3, 255.0);
 				imwrite(std::string(buff), flow_viz_orig_char);
 
 				// Save warped flow visualization image
-				sprintf(buff, "../out/warp_%06d.png", frame_num);
-				std::cout << "Saving warped flow image to: " << std::string(buff) << std::endl;
+				sprintf(buff, "%s%06d.jpg", dir_flow_viz_warp, frame_num);
+				std::cout << "Saving flow visualization (warp): " << std::string(buff) << std::endl;
 				Mat flow_viz_warp_char;
 				flow_viz_warp.convertTo(flow_viz_warp_char, CV_8UC3, 255.0);
 				imwrite(std::string(buff), flow_viz_warp_char);
@@ -254,10 +310,6 @@ int main(int argc, char** argv)
 			}
 
 		}
-
-		// if ( save_flow_orig == 1 ) {
-		// 	std::cout << "TODO" << std::endl;
-		// }
 
 		if ( compute_descriptors == 1 ) {
 

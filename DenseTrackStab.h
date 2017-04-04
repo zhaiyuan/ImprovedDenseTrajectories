@@ -27,11 +27,13 @@
 using namespace cv;
 using namespace cv::gpu;
 
+
 int start_frame = 0;
 int end_frame = INT_MAX;
 int scale_num = 8;
 const float scale_stride = sqrt(2);
 char* bb_file = NULL;
+char* out_dir = NULL;
 
 // parameters for descriptors
 int patch_size = 32;
