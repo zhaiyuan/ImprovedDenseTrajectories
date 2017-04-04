@@ -276,7 +276,7 @@ void InitPry(const Mat& frame, std::vector<float>& scales, std::vector<Size>& si
 		nlayers++;
 	}
 
-	if(nlayers == 0) nlayers = 1; // at least 1 scale 
+	if(nlayers == 0) nlayers = 1; // at least 1 scale
 
 	scale_num = std::min<int>(scale_num, nlayers);
 
@@ -437,7 +437,7 @@ static void MyWarpPerspective(Mat& prev_src, Mat& src, Mat& dst, Mat& M0, int fl
                 W = W ? INTER_TAB_SIZE/W : 0;
                 double fX = std::max((double)INT_MIN, std::min((double)INT_MAX, (X0 + M[0]*x1)*W));
                 double fY = std::max((double)INT_MIN, std::min((double)INT_MAX, (Y0 + M[3]*x1)*W));
- 
+
 				double _X = fX/double(INTER_TAB_SIZE);
 				double _Y = fY/double(INTER_TAB_SIZE);
 
@@ -484,7 +484,7 @@ void ComputeMatch(const std::vector<KeyPoint>& prev_kpts, const std::vector<KeyP
 	std::vector<DMatch> matches;
 
 	desc_matcher.match(desc, prev_desc, matches, mask);
-	
+
 	prev_pts.reserve(matches.size());
 	pts.reserve(matches.size());
 
@@ -515,7 +515,7 @@ void MergeMatch(const std::vector<Point2f>& prev_pts1, const std::vector<Point2f
 
 	for(size_t i = 0; i < prev_pts2.size(); i++) {
 		prev_pts_all.push_back(prev_pts2[i]);
-		pts_all.push_back(pts2[i]);	
+		pts_all.push_back(pts2[i]);
 	}
 
 	return;
@@ -529,8 +529,10 @@ void MatchFromFlow(const Mat& prev_grey, const Mat& flow, std::vector<Point2f>& 
 	pts.clear();
 
 	const int MAX_COUNT = 1000;
+
+	// Compute the set of Shi-Tomasi points on the greyscale image
 	goodFeaturesToTrack(prev_grey, prev_pts, MAX_COUNT, 0.001, 3, mask);
-	
+
 	if(prev_pts.size() == 0)
 		return;
 
@@ -538,6 +540,7 @@ void MatchFromFlow(const Mat& prev_grey, const Mat& flow, std::vector<Point2f>& 
 		int x = std::min<int>(std::max<int>(cvRound(prev_pts[i].x), 0), width-1);
 		int y = std::min<int>(std::max<int>(cvRound(prev_pts[i].y), 0), height-1);
 
+		// Extract points from flow image
 		const float* f = flow.ptr<float>(y);
 		pts.push_back(Point2f(x+f[2*x], y+f[2*x+1]));
 	}

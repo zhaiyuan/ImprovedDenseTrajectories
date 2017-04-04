@@ -2,6 +2,7 @@
 #include "Initialize.h"
 #include "Descriptors.h"
 #include "OpticalFlow.h"
+#include "FlowExtractor.h"
 
 #include <time.h>
 
@@ -67,10 +68,7 @@ int main(int argc, char** argv)
 	Mat flow, human_mask;
 
 	// Setup TVL1 flow computation on GPU
-	Mat flow_x, flow_y;
-	GpuMat gpu_grey, gpu_prev_grey, gpu_flow_x, gpu_flow_y;
-	setDevice(0);
-	OpticalFlowDual_TVL1_GPU flow_tvl1;
+	FlowExtractor flow_extractor;
 
 	Mat image, prev_grey, grey;
 
@@ -108,9 +106,9 @@ int main(int argc, char** argv)
 
 			std::cout << "###########################################" << std::endl;
 			std::cout << "Number of Sizes in Pyramid = " << sizes.size() << std::endl;
-			for (int i = 0; i < fscales.size(); i++) {
-				std::cout << "fscale[" << i << "] = " << fscales[i] << " has size ";
-				std::cout << sizes[i] << std::endl;
+			for (int scale_idx = 0; scale_idx < fscales.size(); scale_idx++) {
+				std::cout << "fscale[" << scale_idx << "] = " << fscales[scale_idx] << " has size ";
+				std::cout << sizes[scale_idx] << std::endl;
 			}
 			std::cout << "###########################################" << std::endl;
 
@@ -122,6 +120,9 @@ int main(int argc, char** argv)
 			BuildPry(sizes, CV_32FC(5), prev_poly_pyr);
 			BuildPry(sizes, CV_32FC(5), poly_pyr);
 			BuildPry(sizes, CV_32FC(5), poly_warp_pyr);
+
+			// Setup TVL1 flow computation on GPU
+			flow_extractor = FlowExtractor(sizes);
 
 			xyScaleTracks.resize(scale_num);
 
@@ -175,7 +176,7 @@ int main(int argc, char** argv)
 		my::FarnebackPolyExpPyr(grey, poly_pyr, fscales, 7, 1.5);
 		my::calcOpticalFlowFarneback(prev_poly_pyr, poly_pyr, flow_pyr, 10, 2);
 
-		// matching of flow features
+		// matching of flow features ==> This computes 'goodFeaturesToTrack'
 		MatchFromFlow(prev_grey, flow_pyr[0], prev_pts_flow, pts_flow, human_mask);
 
 		// merge the SURF and flow match
@@ -219,22 +220,11 @@ int main(int argc, char** argv)
 		// Show and/or save the flow visualization images (at the first scale)
 		if( show_flow == 1 || save_flow_viz == 1 ) {
 
-			// Upload to the GPU
-			gpu_prev_grey.upload(prev_grey);
-			gpu_grey.upload(grey);
-			flow_tvl1(gpu_prev_grey, gpu_grey, gpu_flow_x, gpu_flow_y);
+			Mat tvl1_flow_orig = flow_extractor.computeFlow(prev_grey, grey);
+			Mat tvl1_flow_warp = flow_extractor.computeFlow(prev_grey, grey_warp);
 
-			// Download back to the CPU
-			gpu_flow_x.download(flow_x);
-			gpu_flow_y.download(flow_y);
-			std::vector<Mat> flow_ch;
-			flow_ch.push_back(flow_x);
-			flow_ch.push_back(flow_y);
-			Mat flow_merged;
-			merge(flow_ch, flow_merged);
-
-			Mat flow_viz_orig = my::ProcessFlowForVisualization(flow_merged);
-			Mat flow_viz_warp = my::ProcessFlowForVisualization(flow_warp_pyr[0]);
+			Mat flow_viz_orig = my::ProcessFlowForVisualization(tvl1_flow_orig);
+			Mat flow_viz_warp = my::ProcessFlowForVisualization(tvl1_flow_warp);
 
 			if ( show_flow == 1 ) {
 				imshow("Flow Original", flow_viz_orig);
