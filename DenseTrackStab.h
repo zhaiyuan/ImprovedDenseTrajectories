@@ -22,8 +22,10 @@
 #include "opencv2/features2d/features2d.hpp"
 #include "opencv2/core/core.hpp"
 #include "opencv2/nonfree/nonfree.hpp"
+#include "opencv2/gpu/gpu.hpp"
 
 using namespace cv;
+using namespace cv::gpu;
 
 int start_frame = 0;
 int end_frame = INT_MAX;
@@ -64,19 +66,19 @@ typedef struct {
 
 typedef struct {
     int length;  // length of the trajectory
-    int gap;     // initialization gap for feature re-sampling 
+    int gap;     // initialization gap for feature re-sampling
 }TrackInfo;
 
 typedef struct {
     int nBins;   // number of bins for vector quantization
-    bool isHof; 
+    bool isHof;
     int nxCells; // number of cells in x direction
-    int nyCells; 
+    int nyCells;
     int ntCells;
     int dim;     // dimension of the descriptor
     int height;  // size of the block for computing the descriptor
     int width;
-}DescInfo; 
+}DescInfo;
 
 // integral histogram for the descriptors
 typedef struct {
@@ -135,7 +137,7 @@ class Frame
 public:
 	int frameID;
 	std::vector<BoundBox> BBs;
-	
+
 	Frame(const int& frame_)
 	{
 		frameID = frame_;

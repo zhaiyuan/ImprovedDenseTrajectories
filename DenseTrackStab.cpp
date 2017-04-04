@@ -6,8 +6,16 @@
 #include <time.h>
 
 using namespace cv;
+using namespace cv::gpu;
 
-int show_track = 1; // set show_track = 1, if you want to visualize the trajectories
+int show_track  = 0;
+int show_warped = 0;
+int show_flow   = 0;
+int save_flow_viz  = 0;
+int save_flow_orig = 0;
+
+int compute_descriptors = 0;
+
 
 int main(int argc, char** argv)
 {
@@ -58,6 +66,11 @@ int main(int argc, char** argv)
 	Mat prev_desc_surf, desc_surf;
 	Mat flow, human_mask;
 
+	// Setup TVL1 flow computation on GPU
+	GpuMat gpu_grey, gpu_prev_grey, gpu_flow_x, gpu_flow_y;
+	setDevice(0);
+	OpticalFlowDual_TVL1_GPU flow_tvl1;
+
 	Mat image, prev_grey, grey;
 
 	std::vector<float> fscales(0);
@@ -87,7 +100,16 @@ int main(int argc, char** argv)
 			grey.create(frame.size(), CV_8UC1);
 			prev_grey.create(frame.size(), CV_8UC1);
 
+			// Initialize pyramid scales
 			InitPry(frame, fscales, sizes);
+
+			std::cout << "###########################################" << std::endl;
+			std::cout << "Number of Sizes in Pyramid = " << sizes.size() << std::endl;
+			for (int i = 0; i < fscales.size(); i++) {
+				std::cout << "fscale[" << i << "] = " << fscales[i] << " has size ";
+				std::cout << sizes[i] << std::endl;
+			}
+			std::cout << "###########################################" << std::endl;
 
 			BuildPry(sizes, CV_8UC1, prev_grey_pyr);
 			BuildPry(sizes, CV_8UC1, grey_pyr);
@@ -168,147 +190,182 @@ int main(int argc, char** argv)
 
 		Mat H_inv = H.inv();
 		Mat grey_warp = Mat::zeros(grey.size(), CV_8UC1);
-		Mat diff = Mat::zeros(grey.size(), CV_8UC1);
 
 		// warp the second frame
 		MyWarpPerspective(prev_grey, grey, grey_warp, H_inv);
 
-		diff = grey - grey_warp;
+		if( show_warped == 1 ) {
 
-		// if( show_track == 1 ) {
-		// 	imshow( "GreyOrig", grey);
-		// 	imshow( "GreyWarp", grey_warp);
-		// 	imshow( "Difference", diff);
-		// 	c = cvWaitKey(3);
-		// 	if((char)c == 27) break;
-		// }
+			// Difference between normal and warped grey frame
+			Mat diff = Mat::zeros(grey.size(), CV_8UC1);
+			diff = grey - grey_warp;
+
+			imshow( "GreyOrig", grey);
+			imshow( "GreyWarp", grey_warp);
+			imshow( "Difference", diff);
+
+			c = cvWaitKey(3);
+			if((char)c == 27) break;
+		}
 
 		// compute optical flow for all scales once
 		// compute the flow again on the warped image (!)
 		my::FarnebackPolyExpPyr(grey_warp, poly_warp_pyr, fscales, 7, 1.5);
 		my::calcOpticalFlowFarneback(prev_poly_pyr, poly_warp_pyr, flow_warp_pyr, 10, 2);
 
+		// Show and/or save the flow visualization images (at the first scale)
+		if( show_flow == 1 || save_flow_viz == 1 ) {
 
-		if( show_track == 1 ) {
 			Mat flow_viz_orig = my::ProcessFlowForVisualization(flow_pyr[0]);
 			Mat flow_viz_warp = my::ProcessFlowForVisualization(flow_warp_pyr[0]);
-			imshow("Flow Original", flow_viz_orig);
-			imshow("Flow Warp", flow_viz_warp);
-			c = cvWaitKey(3);
-			if((char)c == 27) break;
+
+			if ( show_flow == 1 ) {
+				imshow("Flow Original", flow_viz_orig);
+				imshow("Flow Warp", flow_viz_warp);
+				c = cvWaitKey(3);
+				if((char)c == 27) break;
+			}
+
+			if ( save_flow_viz == 1 ) {
+
+				char buff[100];
+
+				// Save original flow visualization image
+				sprintf(buff, "../out/orig_%06d.png", frame_num);
+				std::cout << "Saving original flow image: " << std::string(buff) << std::endl;
+				Mat flow_viz_orig_char;
+				flow_viz_orig.convertTo(flow_viz_orig_char, CV_8UC3, 255.0);
+				imwrite(std::string(buff), flow_viz_orig_char);
+
+				// Save warped flow visualization image
+				sprintf(buff, "../out/warp_%06d.png", frame_num);
+				std::cout << "Saving warped flow image to: " << std::string(buff) << std::endl;
+				Mat flow_viz_warp_char;
+				flow_viz_warp.convertTo(flow_viz_warp_char, CV_8UC3, 255.0);
+				imwrite(std::string(buff), flow_viz_warp_char);
+
+			}
+
 		}
 
-		// for(int iScale = 0; iScale < scale_num; iScale++) {
-		//
-		// 	// Now for all scales start to compute the features
-		// 	if(iScale == 0)
-		// 		grey.copyTo(grey_pyr[0]);
-		// 	else
-		// 		resize(grey_pyr[iScale-1], grey_pyr[iScale], grey_pyr[iScale].size(), 0, 0, INTER_LINEAR);
-		//
-		// 	int width = grey_pyr[iScale].cols;
-		// 	int height = grey_pyr[iScale].rows;
-		//
-		// 	// compute the integral histograms
-		// 	DescMat* hogMat = InitDescMat(height+1, width+1, hogInfo.nBins);
-		// 	HogComp(prev_grey_pyr[iScale], hogMat->desc, hogInfo);
-		//
-		// 	DescMat* hofMat = InitDescMat(height+1, width+1, hofInfo.nBins);
-		// 	HofComp(flow_warp_pyr[iScale], hofMat->desc, hofInfo);
-		//
-		// 	DescMat* mbhMatX = InitDescMat(height+1, width+1, mbhInfo.nBins);
-		// 	DescMat* mbhMatY = InitDescMat(height+1, width+1, mbhInfo.nBins);
-		// 	MbhComp(flow_warp_pyr[iScale], mbhMatX->desc, mbhMatY->desc, mbhInfo);
-		//
-		// 	// track feature points in each scale separately
-		// 	std::list<Track>& tracks = xyScaleTracks[iScale];
-		// 	for (std::list<Track>::iterator iTrack = tracks.begin(); iTrack != tracks.end();) {
-		// 		int index = iTrack->index;
-		// 		Point2f prev_point = iTrack->point[index];
-		// 		int x = std::min<int>(std::max<int>(cvRound(prev_point.x), 0), width-1);
-		// 		int y = std::min<int>(std::max<int>(cvRound(prev_point.y), 0), height-1);
-		//
-		// 		Point2f point;
-		// 		point.x = prev_point.x + flow_pyr[iScale].ptr<float>(y)[2*x];
-		// 		point.y = prev_point.y + flow_pyr[iScale].ptr<float>(y)[2*x+1];
-		//
-		// 		if(point.x <= 0 || point.x >= width || point.y <= 0 || point.y >= height) {
-		// 			iTrack = tracks.erase(iTrack);
-		// 			continue;
-		// 		}
-		//
-		// 		iTrack->disp[index].x = flow_warp_pyr[iScale].ptr<float>(y)[2*x];
-		// 		iTrack->disp[index].y = flow_warp_pyr[iScale].ptr<float>(y)[2*x+1];
-		//
-		// 		// get the descriptors for the feature point
-		// 		RectInfo rect;
-		// 		GetRect(prev_point, rect, width, height, hogInfo);
-		// 		GetDesc(hogMat, rect, hogInfo, iTrack->hog, index);
-		// 		GetDesc(hofMat, rect, hofInfo, iTrack->hof, index);
-		// 		GetDesc(mbhMatX, rect, mbhInfo, iTrack->mbhX, index);
-		// 		GetDesc(mbhMatY, rect, mbhInfo, iTrack->mbhY, index);
-		// 		iTrack->addPoint(point);
-		//
-		// 		// draw the trajectories at the first scale
-		// 		if(show_track == 1 && iScale == 0)
-		// 			DrawTrack(iTrack->point, iTrack->index, fscales[iScale], image);
-		//
-		// 		// if the trajectory achieves the maximal length
-		// 		// trackInfo.length == 15 frames ?
-		// 		if(iTrack->index >= trackInfo.length) {
-		//
-		// 			std::vector<Point2f> trajectory(trackInfo.length+1);
-		// 			for(int i = 0; i <= trackInfo.length; ++i)
-		// 				trajectory[i] = iTrack->point[i]*fscales[iScale];
-		//
-		// 			std::vector<Point2f> displacement(trackInfo.length);
-		// 			for (int i = 0; i < trackInfo.length; ++i)
-		// 				displacement[i] = iTrack->disp[i]*fscales[iScale];
-		//
-		// 			float mean_x(0), mean_y(0), var_x(0), var_y(0), length(0);
-		// 			if(IsValid(trajectory, mean_x, mean_y, var_x, var_y, length) && IsCameraMotion(displacement)) {
-		// 				// output the trajectory
-		// 				printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t", frame_num, mean_x, mean_y, var_x, var_y, length, fscales[iScale]);
-		//
-		// 				// for spatio-temporal pyramid
-		// 				printf("%f\t", std::min<float>(std::max<float>(mean_x/float(seqInfo.width), 0), 0.999));
-		// 				printf("%f\t", std::min<float>(std::max<float>(mean_y/float(seqInfo.height), 0), 0.999));
-		// 				printf("%f\t", std::min<float>(std::max<float>((frame_num - trackInfo.length/2.0 - start_frame)/float(seqInfo.length), 0), 0.999));
-		//
-		// 				// output the trajectory
-		// 				for (int i = 0; i < trackInfo.length; ++i)
-		// 					printf("%f\t%f\t", displacement[i].x, displacement[i].y);
-		//
-		// 				PrintDesc(iTrack->hog, hogInfo, trackInfo);
-		// 				PrintDesc(iTrack->hof, hofInfo, trackInfo);
-		// 				PrintDesc(iTrack->mbhX, mbhInfo, trackInfo);
-		// 				PrintDesc(iTrack->mbhY, mbhInfo, trackInfo);
-		// 				printf("\n");
-		// 			}
-		//
-		// 			iTrack = tracks.erase(iTrack);
-		// 			continue;
-		// 		}
-		// 		++iTrack;
-		// 	}
-		// 	ReleDescMat(hogMat);
-		// 	ReleDescMat(hofMat);
-		// 	ReleDescMat(mbhMatX);
-		// 	ReleDescMat(mbhMatY);
-		//
-		// 	if(init_counter != trackInfo.gap)
-		// 		continue;
-		//
-		// 	// detect new feature points every gap frames
-		// 	std::vector<Point2f> points(0);
-		// 	for(std::list<Track>::iterator iTrack = tracks.begin(); iTrack != tracks.end(); iTrack++)
-		// 		points.push_back(iTrack->point[iTrack->index]);
-		//
-		// 	DenseSample(grey_pyr[iScale], points, quality, min_distance);
-		// 	// save the new feature points
-		// 	for(i = 0; i < points.size(); i++)
-		// 		tracks.push_back(Track(points[i], trackInfo, hogInfo, hofInfo, mbhInfo));
+		// if ( save_flow_orig == 1 ) {
+		// 	std::cout << "TODO" << std::endl;
 		// }
+
+		if ( compute_descriptors == 1 ) {
+
+			for(int iScale = 0; iScale < scale_num; iScale++) {
+
+				// Now for all scales start to compute the features
+				if(iScale == 0)
+					grey.copyTo(grey_pyr[0]);
+				else
+					resize(grey_pyr[iScale-1], grey_pyr[iScale], grey_pyr[iScale].size(), 0, 0, INTER_LINEAR);
+
+				int width = grey_pyr[iScale].cols;
+				int height = grey_pyr[iScale].rows;
+
+				// compute the integral histograms
+				DescMat* hogMat = InitDescMat(height+1, width+1, hogInfo.nBins);
+				HogComp(prev_grey_pyr[iScale], hogMat->desc, hogInfo);
+
+				DescMat* hofMat = InitDescMat(height+1, width+1, hofInfo.nBins);
+				HofComp(flow_warp_pyr[iScale], hofMat->desc, hofInfo);
+
+				DescMat* mbhMatX = InitDescMat(height+1, width+1, mbhInfo.nBins);
+				DescMat* mbhMatY = InitDescMat(height+1, width+1, mbhInfo.nBins);
+				MbhComp(flow_warp_pyr[iScale], mbhMatX->desc, mbhMatY->desc, mbhInfo);
+
+				// track feature points in each scale separately
+				std::list<Track>& tracks = xyScaleTracks[iScale];
+				for (std::list<Track>::iterator iTrack = tracks.begin(); iTrack != tracks.end();) {
+					int index = iTrack->index;
+					Point2f prev_point = iTrack->point[index];
+					int x = std::min<int>(std::max<int>(cvRound(prev_point.x), 0), width-1);
+					int y = std::min<int>(std::max<int>(cvRound(prev_point.y), 0), height-1);
+
+					Point2f point;
+					point.x = prev_point.x + flow_pyr[iScale].ptr<float>(y)[2*x];
+					point.y = prev_point.y + flow_pyr[iScale].ptr<float>(y)[2*x+1];
+
+					if(point.x <= 0 || point.x >= width || point.y <= 0 || point.y >= height) {
+						iTrack = tracks.erase(iTrack);
+						continue;
+					}
+
+					iTrack->disp[index].x = flow_warp_pyr[iScale].ptr<float>(y)[2*x];
+					iTrack->disp[index].y = flow_warp_pyr[iScale].ptr<float>(y)[2*x+1];
+
+					// get the descriptors for the feature point
+					RectInfo rect;
+					GetRect(prev_point, rect, width, height, hogInfo);
+					GetDesc(hogMat, rect, hogInfo, iTrack->hog, index);
+					GetDesc(hofMat, rect, hofInfo, iTrack->hof, index);
+					GetDesc(mbhMatX, rect, mbhInfo, iTrack->mbhX, index);
+					GetDesc(mbhMatY, rect, mbhInfo, iTrack->mbhY, index);
+					iTrack->addPoint(point);
+
+					// draw the trajectories at the first scale
+					if(show_track == 1 && iScale == 0)
+						DrawTrack(iTrack->point, iTrack->index, fscales[iScale], image);
+
+					// if the trajectory achieves the maximal length
+					// trackInfo.length == 15 frames ?
+					if(iTrack->index >= trackInfo.length) {
+
+						std::vector<Point2f> trajectory(trackInfo.length+1);
+						for(int i = 0; i <= trackInfo.length; ++i)
+							trajectory[i] = iTrack->point[i]*fscales[iScale];
+
+						std::vector<Point2f> displacement(trackInfo.length);
+						for (int i = 0; i < trackInfo.length; ++i)
+							displacement[i] = iTrack->disp[i]*fscales[iScale];
+
+						float mean_x(0), mean_y(0), var_x(0), var_y(0), length(0);
+						if(IsValid(trajectory, mean_x, mean_y, var_x, var_y, length) && IsCameraMotion(displacement)) {
+							// output the trajectory
+							printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t", frame_num, mean_x, mean_y, var_x, var_y, length, fscales[iScale]);
+
+							// for spatio-temporal pyramid
+							printf("%f\t", std::min<float>(std::max<float>(mean_x/float(seqInfo.width), 0), 0.999));
+							printf("%f\t", std::min<float>(std::max<float>(mean_y/float(seqInfo.height), 0), 0.999));
+							printf("%f\t", std::min<float>(std::max<float>((frame_num - trackInfo.length/2.0 - start_frame)/float(seqInfo.length), 0), 0.999));
+
+							// output the trajectory
+							for (int i = 0; i < trackInfo.length; ++i)
+								printf("%f\t%f\t", displacement[i].x, displacement[i].y);
+
+							PrintDesc(iTrack->hog, hogInfo, trackInfo);
+							PrintDesc(iTrack->hof, hofInfo, trackInfo);
+							PrintDesc(iTrack->mbhX, mbhInfo, trackInfo);
+							PrintDesc(iTrack->mbhY, mbhInfo, trackInfo);
+							printf("\n");
+						}
+
+						iTrack = tracks.erase(iTrack);
+						continue;
+					}
+					++iTrack;
+				}
+				ReleDescMat(hogMat);
+				ReleDescMat(hofMat);
+				ReleDescMat(mbhMatX);
+				ReleDescMat(mbhMatY);
+
+				if(init_counter != trackInfo.gap)
+					continue;
+
+				// detect new feature points every gap frames
+				std::vector<Point2f> points(0);
+				for(std::list<Track>::iterator iTrack = tracks.begin(); iTrack != tracks.end(); iTrack++)
+					points.push_back(iTrack->point[iTrack->index]);
+
+				DenseSample(grey_pyr[iScale], points, quality, min_distance);
+				// save the new feature points
+				for(i = 0; i < points.size(); i++)
+					tracks.push_back(Track(points[i], trackInfo, hogInfo, hofInfo, mbhInfo));
+			}
+		}
 
 		init_counter = 0;
 		grey.copyTo(prev_grey);

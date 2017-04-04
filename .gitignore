@@ -1,6 +1,7 @@
 .build_release/
 release/
 test_sequences/
+out/
 
 # Prerequisites
 *.d
