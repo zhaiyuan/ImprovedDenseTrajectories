@@ -1,5 +1,5 @@
 # set the binaries that have to be built
-TARGETS := DenseTrackStab Video
+TARGETS := DenseTrackStabOrig Video
 
 # set the build configuration set
 BUILD := release

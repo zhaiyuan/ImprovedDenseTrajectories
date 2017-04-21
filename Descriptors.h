@@ -469,7 +469,7 @@ static void MyWarpPerspective(Mat& prev_src, Mat& src, Mat& dst, Mat& M0, int fl
 	}
 }
 
-void ComputeMatch(const std::vector<KeyPoint>& prev_kpts, const std::vector<KeyPoint>& kpts,
+std::vector<DMatch> ComputeMatch(const std::vector<KeyPoint>& prev_kpts, const std::vector<KeyPoint>& kpts,
 				  const Mat& prev_desc, const Mat& desc, std::vector<Point2f>& prev_pts, std::vector<Point2f>& pts)
 {
 	prev_pts.clear();
@@ -495,7 +495,7 @@ void ComputeMatch(const std::vector<KeyPoint>& prev_kpts, const std::vector<KeyP
 		pts.push_back(kpts[dmatch.queryIdx].pt);
 	}
 
-	return;
+	return matches;
 }
 
 void MergeMatch(const std::vector<Point2f>& prev_pts1, const std::vector<Point2f>& pts1,
