@@ -16,6 +16,11 @@ char dir_gray_warp[500];
 
 bool print_idt_out     = false;
 bool save_warp_images  = false;
+
+bool show_keypoint_images = true;
+bool save_keypoint_images = true;
+
+bool show_match_images = true;
 bool save_match_images = true;
 
 int main(int argc, char** argv)
@@ -32,6 +37,7 @@ int main(int argc, char** argv)
 
 	char dir_gray_warp[500];
 	char dir_keypoint_matches[500];
+	char dir_keypoints[500];
 
 	// Create output directories for saving warped images
 	if (out_dir != NULL)
@@ -53,6 +59,12 @@ int main(int argc, char** argv)
 		{
 			std::cout << "Creating directory: " << dir_keypoint_matches << std::endl;
 			mkdir(dir_keypoint_matches, 0700);
+		}
+		sprintf(dir_keypoints, "%s/keypoints/", out_dir);
+		if (save_keypoint_images && stat(dir_keypoints, &st) == -1)
+		{
+			std::cout << "Creating directory: " << dir_keypoints << std::endl;
+			mkdir(dir_keypoints, 0700);
 		}
 	}
 
@@ -213,48 +225,66 @@ int main(int argc, char** argv)
 			imwrite(std::string(buff), grey_warp);
 		}
 
-		// Display the matches and save the image
-		if (save_match_images && matches.size() > 0)
+		if (show_keypoint_images || save_keypoint_images)
 		{
+			Mat keypoint_image = Mat::zeros(grey.size(), CV_8UC3);
+			cvtColor(grey, keypoint_image, CV_GRAY2BGR);
+
+			// Draw SURF keypoints (yellow)
+			std::vector<Point2f> pts;
+			KeyPoint::convert(kpts_surf, pts);
+			for (int i = 0; i < pts.size(); i++)
+				circle(keypoint_image, pts[i], 3, Scalar(0,255,255), 1, CV_AA);
+
+			// Draw FLOW keypoints (blue)
+			for (int i = 0; i < pts_flow.size(); i++)
+				circle(keypoint_image, pts_flow[i], 3, Scalar(255,0,0), 1, CV_AA);
+
+			// Show the keypoint image
+			if (show_keypoint_images)
+				imshow("KeyPoints", keypoint_image);
+
+			// Save the keypoint image
+			if (save_keypoint_images)
+			{
+				sprintf(buff, "%s%06d.jpg", dir_keypoints, frame_num);
+				imwrite(std::string(buff), keypoint_image);
+			}
+		}
+
+		if ((show_match_images || save_match_images) && matches.size() > 0)
+		{
+			int display_match_limit = 50;
 			std::cout << "Number of matches: " << matches.size() << std::endl;
 
-			// sprintf(buff, "%s%06d.jpg", dir_keypoint_matches, frame_num);
-			// imwrite(std::string(buff), match_im);
-
 			try {
-				Mat match_im_surf;
 
 				std::vector<DMatch> matches_limit;
-				for (int i = 0; i < 20; i++)
-				{
+				for (int i = 0; i < display_match_limit; i++)
 					matches_limit.push_back(matches[i]);
+
+				Mat matches_image;
+				drawMatches(prev_grey, prev_kpts_surf, grey, kpts_surf, matches_limit, matches_image);
+
+				if (show_match_images)
+					imshow("Matches", matches_image);
+
+				if (save_match_images)
+				{
+					sprintf(buff, "%s%06d.jpg", dir_keypoint_matches, frame_num);
+					imwrite(std::string(buff), matches_image);
 				}
 
-				drawMatches(prev_grey, prev_kpts_surf, grey, kpts_surf, matches_limit, match_im_surf);
-				imshow("SURF Matches", match_im_surf);
 			} catch (Exception &e) {
 				std::cout << e.msg << std::endl;
 			}
+		}
 
-			Mat im_keypoints_surf, im_keypoints_flow;
-			drawKeypoints(grey, kpts_surf, im_keypoints_surf);
-			imshow("SURF KeyPoints", im_keypoints_surf);
-
-			// Conversion to std::vector<KeyPoint>
-			kpts_flow.clear();
-			// for(auto const& pt: pts_flow) {
-			// 	KeyPoint keypt(pt);
-			// 	kpts_flow.push_back(keypt);
-			// }
-
-			KeyPoint::convert(pts_flow, kpts_flow);
-			drawKeypoints(grey, kpts_flow, im_keypoints_flow);
-			imshow("FLOW KeyPoints", im_keypoints_flow);
-
+		if (show_keypoint_images || show_match_images)
+		{
 			c = cvWaitKey(1);
 			if((char)c == (int)('n'))
 				break;
-
 		}
 
 		// compute optical flow for all scales once
