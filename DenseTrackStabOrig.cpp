@@ -14,14 +14,16 @@ using namespace cv;
 int show_track = 0; // set show_track = 1, if you want to visualize the trajectories
 char dir_gray_warp[500];
 
-bool print_idt_out     = false;
-bool save_warp_images  = false;
+bool print_idt_out = false;
 
 bool show_keypoint_images = true;
 bool save_keypoint_images = true;
 
-bool show_match_images = true;
+bool show_match_images = false;
 bool save_match_images = true;
+
+bool show_warp_images = false;
+bool save_warp_images = true;
 
 int main(int argc, char** argv)
 {
@@ -209,7 +211,16 @@ int main(int argc, char** argv)
 			// This function finds and returns the perspective transformation H
 			Mat temp = findHomography(prev_pts_all, pts_all, RANSAC, 1, match_mask);
 			if(countNonZero(Mat(match_mask)) > 25)
+			{
 				H = temp;
+
+				// Use default OpenCV version
+				// Mat my_H_inv = H.inv();
+				// Mat my_grey_warp = Mat::zeros(grey.size(), CV_8UC1);
+				// warpPerspective(grey, my_grey_warp, my_H_inv, grey.size());
+				// imshow("Warp", my_grey_warp);
+				// waitKey(1);
+			}
 		}
 
 		Mat H_inv = H.inv();
@@ -280,12 +291,24 @@ int main(int argc, char** argv)
 			}
 		}
 
-		if (show_keypoint_images || show_match_images)
+		// Grey warped images
+		if (show_warp_images)
+			imshow("Grey Warp", grey_warp);
+
+		if (save_match_images)
+		{
+			sprintf(buff, "%s%06d.jpg", dir_gray_warp, frame_num);
+			imwrite(std::string(buff), grey_warp);
+		}
+
+		if (show_keypoint_images || show_match_images || show_warp_images)
 		{
 			c = cvWaitKey(1);
 			if((char)c == (int)('n'))
 				break;
 		}
+
+		/**********************************************************************/
 
 		// compute optical flow for all scales once
 		my::FarnebackPolyExpPyr(grey_warp, poly_warp_pyr, fscales, 7, 1.5);
@@ -398,6 +421,7 @@ int main(int argc, char** argv)
 			// save the new feature points
 			for(i = 0; i < points.size(); i++)
 				tracks.push_back(Track(points[i], trackInfo, hogInfo, hofInfo, mbhInfo));
+
 		}
 
 		init_counter = 0;

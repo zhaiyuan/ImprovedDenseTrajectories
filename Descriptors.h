@@ -454,6 +454,8 @@ static void MyWarpPerspective(Mat& prev_src, Mat& src, Mat& dst, Mat& M0, int fl
         }
 
         Mat _matA(bh, bw, CV_16U, A);
+
+		// Applies a generic geometrical transformation to an image.
         remap( src, dpart, _XY, _matA, interpolation, borderType, borderValue );
     }
     }
