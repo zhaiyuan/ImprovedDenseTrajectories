@@ -41,13 +41,13 @@ int main(int argc, char** argv)
 			mkdir(out_dir, 0700);
 		}
 		sprintf(dir_gray_warp, "%s/gray_warped/", out_dir);
-		if (save_warp_images && tat(dir_gray_warp, &st) == -1)
+		if (save_warp_images && stat(dir_gray_warp, &st) == -1)
 		{
 			std::cout << "Creating directory: " << dir_gray_warp << std::endl;
 			mkdir(dir_gray_warp, 0700);
 		}
 		sprintf(dir_keypoint_matches, "%s/keypoint_matches/", out_dir);
-		if (save_match_images && tat(dir_keypoint_matches, &st) == -1)
+		if (save_match_images && stat(dir_keypoint_matches, &st) == -1)
 		{
 			std::cout << "Creating directory: " << dir_keypoint_matches << std::endl;
 			mkdir(dir_keypoint_matches, 0700);
@@ -200,10 +200,11 @@ int main(int argc, char** argv)
 		Mat grey_warp = Mat::zeros(grey.size(), CV_8UC1);
 		MyWarpPerspective(prev_grey, grey, grey_warp, H_inv); // warp the second frame
 
+		char buff[1000];
+
 		// Save the warped frame
 		if (save_warp_images)
 		{
-			char buff[1000];
 			sprintf(buff, "%s%06d.jpg", dir_gray_warp, frame_num);
 			imwrite(std::string(buff), grey_warp);
 		}

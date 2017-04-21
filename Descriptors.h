@@ -472,17 +472,16 @@ static void MyWarpPerspective(Mat& prev_src, Mat& src, Mat& dst, Mat& M0, int fl
 std::vector<DMatch> ComputeMatch(const std::vector<KeyPoint>& prev_kpts, const std::vector<KeyPoint>& kpts,
 				  const Mat& prev_desc, const Mat& desc, std::vector<Point2f>& prev_pts, std::vector<Point2f>& pts)
 {
+	std::vector<DMatch> matches;
 	prev_pts.clear();
 	pts.clear();
 
 	if(prev_kpts.size() == 0 || kpts.size() == 0)
-		return;
+		return matches;
 
 	Mat mask = windowedMatchingMask(kpts, prev_kpts, 25, 25);
 
 	BFMatcher desc_matcher(NORM_L2);
-	std::vector<DMatch> matches;
-
 	desc_matcher.match(desc, prev_desc, matches, mask);
 
 	prev_pts.reserve(matches.size());
