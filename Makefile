@@ -12,7 +12,7 @@ BINDIR := $(BUILD)
 # libraries
 LDLIBS = $(addprefix -l, $(LIBS) $(LIBS_$(notdir $*)))
 LIBS := \
-	opencv_core opencv_highgui opencv_video opencv_imgproc opencv_calib3d opencv_features2d opencv_nonfree opencv_gpu \
+	opencv_core opencv_highgui opencv_video opencv_imgproc opencv_calib3d opencv_features2d opencv_nonfree opencv_flann opencv_gpu \
 	avformat avdevice avutil avcodec swscale
 
 # set some flags and compiler/linker specific commands

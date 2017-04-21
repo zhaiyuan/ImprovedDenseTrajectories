@@ -1,7 +1,7 @@
 #ifndef DESCRIPTORS_H_
 #define DESCRIPTORS_H_
 
-#include "DenseTrackStab.h"
+#include "DenseTrackStabOrig.h"
 using namespace cv;
 
 // get the rectangle for computing the descriptor
@@ -481,8 +481,13 @@ std::vector<DMatch> ComputeMatch(const std::vector<KeyPoint>& prev_kpts, const s
 
 	Mat mask = windowedMatchingMask(kpts, prev_kpts, 25, 25);
 
-	BFMatcher desc_matcher(NORM_L2);
-	desc_matcher.match(desc, prev_desc, matches, mask);
+	// BruteForce Matcher
+	//BFMatcher desc_matcher(NORM_L2);
+	//desc_matcher.match(desc, prev_desc, matches, mask);
+
+	// FLANNBased Matcher
+	FlannBasedMatcher desc_matcher;
+  	desc_matcher.match( desc, prev_desc, matches, mask);
 
 	prev_pts.reserve(matches.size());
 	pts.reserve(matches.size());

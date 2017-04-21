@@ -3,6 +3,7 @@
 #include "Descriptors.h"
 #include "OpticalFlow.h"
 
+#include <string>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -13,6 +14,7 @@ using namespace cv;
 int show_track = 0; // set show_track = 1, if you want to visualize the trajectories
 char dir_gray_warp[500];
 
+bool print_idt_out     = false;
 bool save_warp_images  = false;
 bool save_match_images = true;
 
@@ -88,6 +90,8 @@ int main(int argc, char** argv)
 	std::vector<Point2f> prev_pts_all, pts_all;
 
 	std::vector<KeyPoint> prev_kpts_surf, kpts_surf;
+	std::vector<KeyPoint> kpts_flow;
+
 	Mat prev_desc_surf, desc_surf;
 	Mat flow, human_mask;
 
@@ -210,12 +214,47 @@ int main(int argc, char** argv)
 		}
 
 		// Display the matches and save the image
-		if (save_match_images)
+		if (save_match_images && matches.size() > 0)
 		{
-			Mat match_im;
-			drawMatches(prev_grey, prev_kpts_surf, grey, kpts_surf, matches, match_im);
-			sprintf(buff, "%s%06d.jpg", dir_keypoint_matches, frame_num);
-			imwrite(std::string(buff), match_im);
+			std::cout << "Number of matches: " << matches.size() << std::endl;
+
+			// sprintf(buff, "%s%06d.jpg", dir_keypoint_matches, frame_num);
+			// imwrite(std::string(buff), match_im);
+
+			try {
+				Mat match_im_surf;
+
+				std::vector<DMatch> matches_limit;
+				for (int i = 0; i < 20; i++)
+				{
+					matches_limit.push_back(matches[i]);
+				}
+
+				drawMatches(prev_grey, prev_kpts_surf, grey, kpts_surf, matches_limit, match_im_surf);
+				imshow("SURF Matches", match_im_surf);
+			} catch (Exception &e) {
+				std::cout << e.msg << std::endl;
+			}
+
+			Mat im_keypoints_surf, im_keypoints_flow;
+			drawKeypoints(grey, kpts_surf, im_keypoints_surf);
+			imshow("SURF KeyPoints", im_keypoints_surf);
+
+			// Conversion to std::vector<KeyPoint>
+			kpts_flow.clear();
+			// for(auto const& pt: pts_flow) {
+			// 	KeyPoint keypt(pt);
+			// 	kpts_flow.push_back(keypt);
+			// }
+
+			KeyPoint::convert(pts_flow, kpts_flow);
+			drawKeypoints(grey, kpts_flow, im_keypoints_flow);
+			imshow("FLOW KeyPoints", im_keypoints_flow);
+
+			c = cvWaitKey(1);
+			if((char)c == (int)('n'))
+				break;
+
 		}
 
 		// compute optical flow for all scales once
@@ -286,7 +325,8 @@ int main(int argc, char** argv)
 						displacement[i] = iTrack->disp[i]*fscales[iScale];
 
 					float mean_x(0), mean_y(0), var_x(0), var_y(0), length(0);
-					if(IsValid(trajectory, mean_x, mean_y, var_x, var_y, length) && IsCameraMotion(displacement)) {
+					if(print_idt_out && IsValid(trajectory, mean_x, mean_y, var_x, var_y, length) && IsCameraMotion(displacement)) {
+
 						// output the trajectory
 						printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t", frame_num, mean_x, mean_y, var_x, var_y, length, fscales[iScale]);
 
